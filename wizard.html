@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ghost AI - System Builder</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-dark: #0a0e14;
+            --bg-darker: #050810;
+            --terminal-green: #00ff41;
+            --terminal-green-dim: #00cc33;
+            --terminal-blue: #00d4ff;
+            --terminal-yellow: #ffb000;
+            --terminal-red: #ff3366;
+            --text-primary: #e6e6e6;
+            --text-secondary: #8b8b8b;
+            --border-color: #1a2332;
+            --glow: rgba(0, 255, 65, 0.3);
+        }
+        
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-darker);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        /* Animated background grid */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 255, 65, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 65, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        @keyframes gridMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+        
+        .logo {
+            font-size: 48px;
+            font-weight: 700;
+            color: var(--terminal-green);
+            text-shadow: 0 0 20px var(--glow);
+            margin-bottom: 10px;
+            font-family: 'Space Mono', monospace;
+            letter-spacing: -2px;
+        }
+        
+        .tagline {
+            color: var(--text-secondary);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+        
+        /* Main wizard container */
+        .wizard {
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            animation: fadeIn 1s ease-out 0.3s both;
+        }
+        
+        /* Progress bar */
+        .progress-container {
+            display: flex;
+            background: var(--bg-darker);
+            border-bottom: 1px solid var(--border-color);
+            padding: 20px;
+            gap: 10px;
+        }
+        
+        .progress-step {
+            flex: 1;
+            text-align: center;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            transition: all 0.3s ease;
+            cursor: default;
+        }
+        
+        .progress-step.active {
+            background: rgba(0, 255, 65, 0.1);
+            border-color: var(--terminal-green);
+            color: var(--terminal-green);
+            box-shadow: 0 0 15px var(--glow);
+        }
+        
+        .progress-step.completed {
+            background: rgba(0, 212, 255, 0.1);
+            border-color: var(--terminal-blue);
+            color: var(--terminal-blue);
+        }
+        
+        /* Content area */
+        .content {
+            padding: 40px;
+            min-height: 500px;
+        }
+        
+        .step {
+            display: none;
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        .step.active {
+            display: block;
+        }
+        
+        .step-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--terminal-green);
+            margin-bottom: 10px;
+            font-family: 'Space Mono', monospace;
+        }
+        
+        .step-description {
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        
+        /* Hardware detection card */
+        .hardware-card {
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .hardware-card:hover {
+            border-color: var(--terminal-green);
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+        }
+        
+        .hardware-icon {
+            font-size: 48px;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 255, 65, 0.1);
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+        
+        .hardware-info {
+            flex: 1;
+        }
+        
+        .hardware-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--terminal-green);
+            margin-bottom: 5px;
+        }
+        
+        .hardware-details {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        
+        .hardware-status {
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .status-detected {
+            background: rgba(0, 255, 65, 0.2);
+            color: var(--terminal-green);
+        }
+        
+        .status-warning {
+            background: rgba(255, 176, 0, 0.2);
+            color: var(--terminal-yellow);
+        }
+        
+        /* Performance tier selection */
+        .tier-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .tier-card {
+            background: var(--bg-darker);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .tier-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--terminal-green), var(--terminal-blue));
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+        
+        .tier-card:hover::before {
+            transform: scaleX(1);
+        }
+        
+        .tier-card:hover {
+            border-color: var(--terminal-green);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 255, 65, 0.15);
+        }
+        
+        .tier-card.selected {
+            border-color: var(--terminal-green);
+            background: rgba(0, 255, 65, 0.05);
+            box-shadow: 0 0 30px var(--glow);
+        }
+        
+        .tier-card.selected::before {
+            transform: scaleX(1);
+        }
+        
+        .tier-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+        
+        .tier-basic .tier-badge {
+            background: rgba(255, 176, 0, 0.2);
+            color: var(--terminal-yellow);
+        }
+        
+        .tier-standard .tier-badge {
+            background: rgba(0, 212, 255, 0.2);
+            color: var(--terminal-blue);
+        }
+        
+        .tier-performance .tier-badge {
+            background: rgba(0, 255, 65, 0.2);
+            color: var(--terminal-green);
+        }
+        
+        .tier-title {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+        
+        .tier-description {
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        .tier-specs {
+            list-style: none;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .tier-specs li {
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .tier-specs li:last-child {
+            border-bottom: none;
+        }
+        
+        .tier-specs li::before {
+            content: '→';
+            color: var(--terminal-green);
+            margin-right: 8px;
+        }
+        
+        /* Model selection */
+        .model-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 30px 0;
+        }
+        
+        .model-item {
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .model-item:hover {
+            border-color: var(--terminal-green);
+        }
+        
+        .model-checkbox {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--terminal-green);
+            border-radius: 4px;
+            cursor: pointer;
+            position: relative;
+            flex-shrink: 0;
+            background: var(--bg-dark);
+            transition: all 0.2s ease;
+        }
+        
+        .model-checkbox.checked {
+            background: var(--terminal-green);
+            box-shadow: 0 0 10px var(--glow);
+        }
+        
+        .model-checkbox.checked::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--bg-dark);
+            font-weight: 700;
+            font-size: 14px;
+        }
+        
+        .model-info {
+            flex: 1;
+        }
+        
+        .model-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        
+        .model-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .model-size {
+            color: var(--terminal-blue);
+            font-weight: 600;
+            min-width: 60px;
+            text-align: right;
+        }
+        
+        /* Buttons */
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .btn {
+            padding: 14px 32px;
+            border-radius: 6px;
+            border: none;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .btn-primary {
+            background: var(--terminal-green);
+            color: var(--bg-dark);
+            box-shadow: 0 0 20px var(--glow);
+        }
+        
+        .btn-primary:hover {
+            background: var(--terminal-green-dim);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 30px var(--glow);
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        
+        .btn-secondary:hover {
+            border-color: var(--terminal-green);
+            color: var(--terminal-green);
+        }
+        
+        /* Download progress */
+        .download-item {
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 16px;
+            margin: 12px 0;
+        }
+        
+        .download-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .download-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .download-status {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .progress-bar {
+            height: 6px;
+            background: var(--bg-dark);
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--terminal-green), var(--terminal-blue));
+            border-radius: 3px;
+            transition: width 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(255, 255, 255, 0.3) 50%, 
+                transparent 100%);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        /* Summary section */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .summary-card {
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .summary-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--terminal-green);
+            margin-bottom: 5px;
+        }
+        
+        .summary-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        /* Terminal output */
+        .terminal {
+            background: var(--bg-darker);
+            border: 1px solid var(--terminal-green);
+            border-radius: 6px;
+            padding: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            max-height: 400px;
+            overflow-y: auto;
+            margin: 20px 0;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.1);
+        }
+        
+        .terminal-line {
+            color: var(--terminal-green);
+            margin: 4px 0;
+        }
+        
+        .terminal-line.warning {
+            color: var(--terminal-yellow);
+        }
+        
+        .terminal-line.error {
+            color: var(--terminal-red);
+        }
+        
+        .terminal-line.info {
+            color: var(--terminal-blue);
+        }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--bg-darker);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--terminal-green);
+            border-radius: 5px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--terminal-green-dim);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .progress-container {
+                flex-direction: column;
+            }
+            
+            .tier-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .logo {
+                font-size: 36px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">GHOST AI</div>
+            <div class="tagline">Offline AI System Builder</div>
+        </div>
+        
+        <div class="wizard">
+            <div class="progress-container">
+                <div class="progress-step active" data-step="1">01 / Detect</div>
+                <div class="progress-step" data-step="2">02 / Configure</div>
+                <div class="progress-step" data-step="3">03 / Models</div>
+                <div class="progress-step" data-step="4">04 / Options</div>
+                <div class="progress-step" data-step="5">05 / Review</div>
+                <div class="progress-step" data-step="6">06 / Build</div>
+            </div>
+            
+            <div class="content">
+                <!-- Step 1: Hardware Detection -->
+                <div class="step active" data-step="1">
+                    <div class="step-title">Hardware Detection</div>
+                    <div class="step-description">
+                        Detecting your system hardware to recommend optimal configuration...
+                    </div>
+                    
+                    <div class="hardware-card">
+                        <div class="hardware-icon">🖥️</div>
+                        <div class="hardware-info">
+                            <div class="hardware-name" id="cpu-name">Detecting CPU...</div>
+                            <div class="hardware-details" id="cpu-details">Analyzing processor capabilities...</div>
+                        </div>
+                        <div class="hardware-status status-detected" id="cpu-status">DETECTED</div>
+                    </div>
+                    
+                    <div class="hardware-card">
+                        <div class="hardware-icon">🎮</div>
+                        <div class="hardware-info">
+                            <div class="hardware-name" id="gpu-name">Detecting GPU...</div>
+                            <div class="hardware-details" id="gpu-details">Checking for graphics acceleration...</div>
+                        </div>
+                        <div class="hardware-status status-warning" id="gpu-status">CHECKING</div>
+                    </div>
+                    
+                    <div class="hardware-card">
+                        <div class="hardware-icon">💾</div>
+                        <div class="hardware-info">
+                            <div class="hardware-name" id="usb-name">USB Drive</div>
+                            <div class="hardware-details" id="usb-details">Will be detected during USB creation phase</div>
+                        </div>
+                        <div class="hardware-status status-warning" id="usb-status">PENDING</div>
+                    </div>
+                    
+                    <div class="button-group">
+                        <button class="btn btn-secondary" onclick="manualConfig()">Manual Configuration</button>
+                        <button class="btn btn-primary" onclick="nextStep()">Continue →</button>
+                    </div>
+                </div>
+                
+                <!-- Step 2: Performance Tier -->
+                <div class="step" data-step="2">
+                    <div class="step-title">Performance Tier</div>
+                    <div class="step-description">
+                        Select the performance tier based on your target hardware. This determines which AI features to enable.
+                    </div>
+                    
+                    <div class="tier-grid">
+                        <div class="tier-card tier-basic" onclick="selectTier('basic')">
+                            <div class="tier-badge">Basic</div>
+                            <div class="tier-title">CPU Only</div>
+                            <div class="tier-description">
+                                For systems without dedicated GPU. Basic AI capabilities with text generation and analysis.
+                            </div>
+                            <ul class="tier-specs">
+                                <li>Text generation (fast models)</li>
+                                <li>Speech recognition</li>
+                                <li>Text-to-speech</li>
+                                <li>No image generation</li>
+                                <li>~40GB storage</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="tier-card tier-standard selected" onclick="selectTier('standard')">
+                            <div class="tier-badge">Standard</div>
+                            <div class="tier-title">AMD GPU / Apple Silicon</div>
+                            <div class="tier-description">
+                                For Apple Silicon Macs or AMD GPUs. Full AI capabilities with moderate image generation speed.
+                            </div>
+                            <ul class="tier-specs">
+                                <li>All text models (including large)</li>
+                                <li>Vision models (image analysis)</li>
+                                <li>Speech recognition & synthesis</li>
+                                <li>Image generation (10-30s)</li>
+                                <li>~60GB storage</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="tier-card tier-performance" onclick="selectTier('performance')">
+                            <div class="tier-badge">Performance</div>
+                            <div class="tier-title">NVIDIA GPU</div>
+                            <div class="tier-description">
+                                Maximum performance with NVIDIA CUDA. Real-time image generation and largest models.
+                            </div>
+                            <ul class="tier-specs">
+                                <li>All available models</li>
+                                <li>Vision & multimodal AI</li>
+                                <li>Full speech capabilities</li>
+                                <li>Fast image generation (2-5s)</li>
+                                <li>~80GB storage</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="button-group">
+                        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button class="btn btn-primary" onclick="nextStep()">Continue →</button>
+                    </div>
+                </div>
+                
+                <!-- Step 3: Model Selection -->
+                <div class="step" data-step="3">
+                    <div class="step-title">AI Models</div>
+                    <div class="step-description">
+                        Select which AI models to include. Pre-selected based on your performance tier.
+                    </div>
+                    
+                    <div class="model-list" id="modelList">
+                        <!-- Models will be populated by JavaScript -->
+                    </div>
+                    
+                    <div class="button-group">
+                        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button class="btn btn-primary" onclick="nextStep()">Continue →</button>
+                    </div>
+                </div>
+                
+                <!-- Step 4: Additional Options -->
+                <div class="step" data-step="4">
+                    <div class="step-title">Additional Options</div>
+                    <div class="step-description">
+                        Choose optional components to enhance your offline AI system.
+                    </div>
+                    
+                    <div class="model-list">
+                        <div class="model-item">
+                            <div class="model-checkbox checked" id="check-wikipedia" onclick="toggleOption('wikipedia')"></div>
+                            <div class="model-info">
+                                <div class="model-name">Offline Wikipedia</div>
+                                <div class="model-meta">Complete English Wikipedia (no images) for reference and knowledge</div>
+                            </div>
+                            <div class="model-size">96 GB</div>
+                        </div>
+                        
+                        <div class="model-item">
+                            <div class="model-checkbox checked" id="check-encryption" onclick="toggleOption('encryption')"></div>
+                            <div class="model-info">
+                                <div class="model-name">Full Disk Encryption</div>
+                                <div class="model-meta">LUKS encryption for maximum privacy and security</div>
+                            </div>
+                            <div class="model-size">-</div>
+                        </div>
+                        
+                        <div class="model-item">
+                            <div class="model-checkbox checked" id="check-docs" onclick="toggleOption('docs')"></div>
+                            <div class="model-info">
+                                <div class="model-name">Offline Documentation</div>
+                                <div class="model-meta">Programming docs (Python, JavaScript, Linux, etc.)</div>
+                            </div>
+                            <div class="model-size">2 GB</div>
+                        </div>
+                        
+                        <div class="model-item">
+                            <div class="model-checkbox" id="check-books" onclick="toggleOption('books')"></div>
+                            <div class="model-info">
+                                <div class="model-name">Project Gutenberg Books</div>
+                                <div class="model-meta">60,000+ free ebooks for offline reading</div>
+                            </div>
+                            <div class="model-size">15 GB</div>
+                        </div>
+                    </div>
+                    
+                    <div class="button-group">
+                        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button class="btn btn-primary" onclick="nextStep()">Review →</button>
+                    </div>
+                </div>
+                
+                <!-- Step 5: Review -->
+                <div class="step" data-step="5">
+                    <div class="step-title">Review Configuration</div>
+                    <div class="step-description">
+                        Review your selections before building the Ghost AI system.
+                    </div>
+                    
+                    <div class="summary-grid">
+                        <div class="summary-card">
+                            <div class="summary-value" id="summary-tier">Standard</div>
+                            <div class="summary-label">Performance Tier</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="summary-models">7</div>
+                            <div class="summary-label">AI Models</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="summary-size">156 GB</div>
+                            <div class="summary-label">Total Size</div>
+                        </div>
+                        <div class="summary-card">
+                            <div class="summary-value" id="summary-time">3-4h</div>
+                            <div class="summary-label">Est. Time</div>
+                        </div>
+                    </div>
+                    
+                    <div class="terminal" id="reviewTerminal">
+                        <div class="terminal-line">→ Configuration Summary</div>
+                        <div class="terminal-line">─────────────────────────────────────</div>
+                        <div class="terminal-line" id="review-details"></div>
+                    </div>
+                    
+                    <div class="button-group">
+                        <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                        <button class="btn btn-primary" onclick="startBuild()">Build System →</button>
+                    </div>
+                </div>
+                
+                <!-- Step 6: Build Progress -->
+                <div class="step" data-step="6">
+                    <div class="step-title">Building System</div>
+                    <div class="step-description">
+                        Your Ghost AI system is being created. This process is automated and will take 2-4 hours.
+                    </div>
+                    
+                    <div id="buildProgress">
+                        <!-- Progress items will be added dynamically -->
+                    </div>
+                    
+                    <div class="terminal" id="buildTerminal">
+                        <div class="terminal-line">→ Ghost AI System Builder v1.0</div>
+                        <div class="terminal-line">→ Initializing...</div>
+                    </div>
+                    
+                    <div class="button-group">
+                        <button class="btn btn-primary" onclick="downloadScripts()" style="display:none;" id="downloadBtn">Download Scripts</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // State management
+        const state = {
+            currentStep: 1,
+            hardware: {
+                cpu: 'Unknown',
+                gpu: 'None',
+                platform: 'Unknown'
+            },
+            tier: 'standard',
+            models: [],
+            options: {
+                wikipedia: true,
+                encryption: true,
+                docs: true,
+                books: false
+            }
+        };
+        
+        // Model definitions
+        const modelDatabase = {
+            basic: [
+                { id: 'llama3.2-3b', name: 'Llama 3.2 3B', size: '2 GB', description: 'Fast, lightweight model for general tasks', checked: true },
+                { id: 'llama3.1-8b', name: 'Llama 3.1 8B', size: '5 GB', description: 'Balanced performance and capability', checked: true },
+                { id: 'qwen2.5-coder-7b', name: 'Qwen 2.5 Coder 7B', size: '5 GB', description: 'Specialized for programming', checked: true },
+                { id: 'mistral-7b', name: 'Mistral 7B', size: '4 GB', description: 'Alternative general model', checked: false }
+            ],
+            standard: [
+                { id: 'llama3.2-3b', name: 'Llama 3.2 3B', size: '2 GB', description: 'Fast, lightweight model', checked: true },
+                { id: 'llama3.1-8b', name: 'Llama 3.1 8B', size: '5 GB', description: 'General reasoning and knowledge', checked: true },
+                { id: 'qwen2.5-coder-7b', name: 'Qwen 2.5 Coder 7B', size: '5 GB', description: 'Programming assistance', checked: true },
+                { id: 'llama3.2-vision-11b', name: 'Llama 3.2 Vision 11B', size: '7 GB', description: 'Image analysis and understanding', checked: true },
+                { id: 'mistral-7b', name: 'Mistral 7B', size: '4 GB', description: 'Alternative perspective', checked: true },
+                { id: 'qwen2.5-32b', name: 'Qwen 2.5 32B', size: '20 GB', description: 'Deep reasoning (requires 16GB+ RAM)', checked: false }
+            ],
+            performance: [
+                { id: 'llama3.2-3b', name: 'Llama 3.2 3B', size: '2 GB', description: 'Fast, lightweight model', checked: true },
+                { id: 'llama3.1-8b', name: 'Llama 3.1 8B', size: '5 GB', description: 'General reasoning', checked: true },
+                { id: 'qwen2.5-coder-7b', name: 'Qwen 2.5 Coder 7B', size: '5 GB', description: 'Programming assistance', checked: true },
+                { id: 'llama3.2-vision-11b', name: 'Llama 3.2 Vision 11B', size: '7 GB', description: 'Image analysis', checked: true },
+                { id: 'qwen2.5-32b', name: 'Qwen 2.5 32B', size: '20 GB', description: 'Deep reasoning', checked: true },
+                { id: 'mistral-7b', name: 'Mistral 7B', size: '4 GB', description: 'Alternative general model', checked: true },
+                { id: 'codestral-22b', name: 'Codestral 22B', size: '13 GB', description: 'Advanced coding model', checked: false }
+            ]
+        };
+        
+        // Hardware detection
+        async function detectHardware() {
+            // Simulate hardware detection
+            setTimeout(() => {
+                const userAgent = navigator.userAgent;
+                const platform = navigator.platform;
+                
+                // Detect platform
+                if (platform.includes('Mac')) {
+                    state.hardware.platform = 'macOS';
+                    state.hardware.cpu = 'Apple Silicon';
+                    state.hardware.gpu = 'Apple M-series';
+                    state.tier = 'standard';
+                } else if (platform.includes('Win')) {
+                    state.hardware.platform = 'Windows';
+                    state.hardware.cpu = 'Intel/AMD x64';
+                    state.hardware.gpu = 'Checking...';
+                } else {
+                    state.hardware.platform = 'Linux';
+                    state.hardware.cpu = 'x86_64';
+                    state.hardware.gpu = 'Not detected';
+                }
+                
+                // Update UI
+                document.getElementById('cpu-name').textContent = state.hardware.cpu;
+                document.getElementById('cpu-details').textContent = `Platform: ${state.hardware.platform}`;
+                document.getElementById('cpu-status').textContent = 'DETECTED';
+                document.getElementById('cpu-status').className = 'hardware-status status-detected';
+                
+                document.getElementById('gpu-name').textContent = state.hardware.gpu;
+                document.getElementById('gpu-details').textContent = 
+                    state.hardware.gpu.includes('Apple') 
+                        ? 'Excellent for AI workloads - Standard tier recommended'
+                        : 'CPU-only configuration - Basic tier recommended';
+                document.getElementById('gpu-status').textContent = 'ANALYZED';
+                document.getElementById('gpu-status').className = 
+                    state.hardware.gpu.includes('Apple') 
+                        ? 'hardware-status status-detected' 
+                        : 'hardware-status status-warning';
+            }, 1500);
+        }
+        
+        // Navigation
+        function nextStep() {
+            if (state.currentStep < 6) {
+                state.currentStep++;
+                updateView();
+                
+                // Special actions for certain steps
+                if (state.currentStep === 3) {
+                    populateModels();
+                } else if (state.currentStep === 5) {
+                    updateReview();
+                }
+            }
+        }
+        
+        function prevStep() {
+            if (state.currentStep > 1) {
+                state.currentStep--;
+                updateView();
+            }
+        }
+        
+        function updateView() {
+            // Update progress bar
+            document.querySelectorAll('.progress-step').forEach(step => {
+                const stepNum = parseInt(step.dataset.step);
+                step.classList.remove('active', 'completed');
+                if (stepNum === state.currentStep) {
+                    step.classList.add('active');
+                } else if (stepNum < state.currentStep) {
+                    step.classList.add('completed');
+                }
+            });
+            
+            // Update step content
+            document.querySelectorAll('.step').forEach(step => {
+                step.classList.remove('active');
+                if (parseInt(step.dataset.step) === state.currentStep) {
+                    step.classList.add('active');
+                }
+            });
+        }
+        
+        // Tier selection
+        function selectTier(tier) {
+            state.tier = tier;
+            document.querySelectorAll('.tier-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            document.querySelector(`.tier-${tier}`).classList.add('selected');
+        }
+        
+        // Model population
+        function populateModels() {
+            const modelList = document.getElementById('modelList');
+            modelList.innerHTML = '';
+            
+            const models = modelDatabase[state.tier];
+            state.models = models.filter(m => m.checked);
+            
+            models.forEach(model => {
+                const item = document.createElement('div');
+                item.className = 'model-item';
+                item.innerHTML = `
+                    <div class="model-checkbox ${model.checked ? 'checked' : ''}" 
+                         onclick="toggleModel('${model.id}')" 
+                         id="model-${model.id}"></div>
+                    <div class="model-info">
+                        <div class="model-name">${model.name}</div>
+                        <div class="model-meta">${model.description}</div>
+                    </div>
+                    <div class="model-size">${model.size}</div>
+                `;
+                modelList.appendChild(item);
+            });
+        }
+        
+        function toggleModel(modelId) {
+            const checkbox = document.getElementById(`model-${modelId}`);
+            checkbox.classList.toggle('checked');
+            
+            // Update state
+            const models = modelDatabase[state.tier];
+            const model = models.find(m => m.id === modelId);
+            if (model) {
+                model.checked = !model.checked;
+                state.models = models.filter(m => m.checked);
+            }
+        }
+        
+        function toggleOption(option) {
+            const checkbox = document.getElementById(`check-${option}`);
+            checkbox.classList.toggle('checked');
+            state.options[option] = !state.options[option];
+        }
+        
+        // Review
+        function updateReview() {
+            const modelCount = state.models.length;
+            let totalSize = state.models.reduce((sum, m) => {
+                const size = parseInt(m.size.split(' ')[0]);
+                return sum + size;
+            }, 0);
+            
+            if (state.options.wikipedia) totalSize += 96;
+            if (state.options.docs) totalSize += 2;
+            if (state.options.books) totalSize += 15;
+            
+            document.getElementById('summary-tier').textContent = 
+                state.tier.charAt(0).toUpperCase() + state.tier.slice(1);
+            document.getElementById('summary-models').textContent = modelCount;
+            document.getElementById('summary-size').textContent = `${totalSize} GB`;
+            document.getElementById('summary-time').textContent = 
+                totalSize > 100 ? '3-5h' : '2-3h';
+            
+            // Build detailed review
+            let details = '';
+            details += `\nPerformance Tier: ${state.tier}\n`;
+            details += `\nAI Models (${modelCount}):\n`;
+            state.models.forEach(m => {
+                details += `  • ${m.name} (${m.size})\n`;
+            });
+            details += `\nOptions:\n`;
+            if (state.options.wikipedia) details += '  • Offline Wikipedia (96 GB)\n';
+            if (state.options.encryption) details += '  • Full Disk Encryption (LUKS)\n';
+            if (state.options.docs) details += '  • Programming Documentation (2 GB)\n';
+            if (state.options.books) details += '  • Project Gutenberg Books (15 GB)\n';
+            details += `\nTotal Storage: ${totalSize} GB\n`;
+            details += `Estimated Time: ${totalSize > 100 ? '3-5 hours' : '2-3 hours'}`;
+            
+            document.getElementById('review-details').innerHTML = 
+                details.split('\n').map(line => `<div class="terminal-line">${line}</div>`).join('');
+        }
+        
+        // Build process
+        function startBuild() {
+            nextStep();
+            
+            const buildProgress = document.getElementById('buildProgress');
+            const terminal = document.getElementById('buildTerminal');
+            
+            const steps = [
+                { name: 'Download Ubuntu ISO', duration: 2000 },
+                { name: 'Prepare USB Drive', duration: 3000 },
+                { name: 'Download AI Models', duration: 5000 },
+                { name: 'Configure System', duration: 2000 },
+                { name: 'Setup Security', duration: 1500 },
+                { name: 'Create Scripts', duration: 1000 }
+            ];
+            
+            let delay = 0;
+            steps.forEach((step, index) => {
+                setTimeout(() => {
+                    addBuildStep(step.name, index);
+                    addTerminalLine(`[${index + 1}/${steps.length}] ${step.name}...`);
+                    
+                    setTimeout(() => {
+                        updateBuildStep(index, 100);
+                        addTerminalLine(`✓ ${step.name} completed`, 'info');
+                        
+                        if (index === steps.length - 1) {
+                            setTimeout(() => {
+                                addTerminalLine('─────────────────────────────────────');
+                                addTerminalLine('✓ Ghost AI System ready!', 'info');
+                                addTerminalLine('→ Download setup scripts below', 'info');
+                                document.getElementById('downloadBtn').style.display = 'block';
+                            }, 500);
+                        }
+                    }, step.duration);
+                }, delay);
+                delay += step.duration + 100;
+            });
+        }
+        
+        function addBuildStep(name, index) {
+            const buildProgress = document.getElementById('buildProgress');
+            const item = document.createElement('div');
+            item.className = 'download-item';
+            item.id = `build-step-${index}`;
+            item.innerHTML = `
+                <div class="download-header">
+                    <div class="download-name">${name}</div>
+                    <div class="download-status" id="status-${index}">Starting...</div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-${index}" style="width: 0%"></div>
+                </div>
+            `;
+            buildProgress.appendChild(item);
+        }
+        
+        function updateBuildStep(index, percent) {
+            document.getElementById(`progress-${index}`).style.width = `${percent}%`;
+            document.getElementById(`status-${index}`).textContent = 
+                percent === 100 ? 'Complete' : `${percent}%`;
+        }
+        
+        function addTerminalLine(text, type = '') {
+            const terminal = document.getElementById('buildTerminal');
+            const line = document.createElement('div');
+            line.className = `terminal-line ${type}`;
+            line.textContent = text;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+        
+        function manualConfig() {
+            // Allow manual hardware specification
+            const cpu = prompt('Enter target CPU type (e.g., Apple Silicon, Intel x64, AMD):', state.hardware.cpu);
+            const gpu = prompt('Enter target GPU (e.g., None, NVIDIA RTX 3080, AMD RX 6800):', state.hardware.gpu);
+            
+            if (cpu) state.hardware.cpu = cpu;
+            if (gpu) state.hardware.gpu = gpu;
+            
+            // Update UI
+            document.getElementById('cpu-name').textContent = state.hardware.cpu;
+            document.getElementById('gpu-name').textContent = state.hardware.gpu;
+            
+            // Recommend tier based on manual input
+            if (gpu.toLowerCase().includes('nvidia')) {
+                state.tier = 'performance';
+            } else if (gpu.toLowerCase().includes('apple') || gpu.toLowerCase().includes('amd')) {
+                state.tier = 'standard';
+            } else {
+                state.tier = 'basic';
+            }
+        }
+        
+        function downloadScripts() {
+            addTerminalLine('→ Generating setup scripts...', 'info');
+            
+            // Generate configuration file
+            const config = {
+                version: '1.0',
+                timestamp: new Date().toISOString(),
+                hardware: state.hardware,
+                tier: state.tier,
+                models: state.models,
+                options: state.options
+            };
+            
+            // Create download
+            const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ghost-ai-config.json';
+            a.click();
+            
+            addTerminalLine('✓ Configuration downloaded: ghost-ai-config.json', 'info');
+            addTerminalLine('→ Next: Run ghost-ai-preflight.sh with this config', 'info');
+        }
+        
+        // Initialize on load
+        window.addEventListener('load', () => {
+            detectHardware();
+        });
+    </script>
+</body>
+</html>

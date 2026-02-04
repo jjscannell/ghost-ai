@@ -75,6 +75,97 @@ error_exit() {
     exit 1
 }
 
+# ============================================================================
+# DISK SPACE CHECK FUNCTION
+# ============================================================================
+check_disk_space() {
+    local required_gb=$1
+    local path=${2:-"/"}
+    local available_gb=$(df -BG "$path" | awk 'NR==2 {gsub(/G/, "", $4); print $4}')
+
+    if [ "$available_gb" -lt "$required_gb" ]; then
+        log_error "Insufficient disk space!"
+        log_error "Required: ${required_gb}GB, Available: ${available_gb}GB"
+        return 1
+    fi
+    log_success "Disk space check passed: ${available_gb}GB available (need ${required_gb}GB)"
+    return 0
+}
+
+# Calculate required space based on tier
+calculate_required_space() {
+    local base_space=40  # Base system + essential tools
+
+    case "$PERF_TIER" in
+        basic)      base_space=$((base_space + 30)) ;;   # ~30GB models
+        standard)   base_space=$((base_space + 45)) ;;   # ~45GB models
+        performance) base_space=$((base_space + 60)) ;;  # ~60GB models
+    esac
+
+    if [ "$INSTALL_WIKIPEDIA" = "true" ]; then
+        base_space=$((base_space + 100))  # ~96GB Wikipedia + buffer
+    fi
+
+    echo "$base_space"
+}
+
+# ============================================================================
+# CONFIG VALIDATION FUNCTION
+# ============================================================================
+validate_config() {
+    local config_file=$1
+
+    if [ ! -f "$config_file" ]; then
+        log_error "Config file not found: $config_file"
+        return 1
+    fi
+
+    # Check if it's valid JSON
+    if ! jq empty "$config_file" 2>/dev/null; then
+        log_error "Invalid JSON in config file"
+        return 1
+    fi
+
+    # Validate required fields
+    local tier=$(jq -r '.tier // empty' "$config_file")
+    if [ -z "$tier" ]; then
+        log_warning "No tier specified in config, using default: standard"
+    elif [[ ! "$tier" =~ ^(basic|standard|performance)$ ]]; then
+        log_error "Invalid tier: $tier. Must be basic, standard, or performance"
+        return 1
+    fi
+
+    # Validate options structure
+    if ! jq -e '.options' "$config_file" > /dev/null 2>&1; then
+        log_warning "No options section in config, using defaults"
+    fi
+
+    log_success "Configuration validated successfully"
+    return 0
+}
+
+# ============================================================================
+# PROGRESS BAR FUNCTION
+# ============================================================================
+show_progress() {
+    local current=$1
+    local total=$2
+    local label=${3:-"Progress"}
+    local width=40
+    local percentage=$((current * 100 / total))
+    local filled=$((width * current / total))
+    local empty=$((width - filled))
+
+    printf "\r${BLUE}[%s]${NC} [" "$label"
+    printf "%${filled}s" | tr ' ' '█'
+    printf "%${empty}s" | tr ' ' '░'
+    printf "] %3d%%" "$percentage"
+
+    if [ "$current" -eq "$total" ]; then
+        echo ""
+    fi
+}
+
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then 
     log_error "Please run as root (use sudo)"
@@ -119,17 +210,26 @@ else
     log_warning "No config file provided, using default configuration"
     
     # Auto-detect GPU if possible
-    if lspci 2>/dev/null | grep -i nvidia &>/dev/null; then
+    if lspci 2>/dev/null | grep -qi "nvidia\|geforce\|rtx\|gtx"; then
         GPU_TYPE="nvidia"
         PERF_TIER="performance"
-    elif lspci 2>/dev/null | grep -i amd &>/dev/null; then
+        log "Detected NVIDIA GPU"
+    elif lspci 2>/dev/null | grep -qi "amd.*radeon\|radeon.*amd"; then
         GPU_TYPE="amd"
         PERF_TIER="standard"
-    elif sysctl -n machdep.cpu.brand_string 2>/dev/null | grep -i "Apple" &>/dev/null; then
-        GPU_TYPE="apple"
-        PERF_TIER="standard"
+        log "Detected AMD GPU"
+    # Apple Silicon detection for Linux (Asahi Linux / Ubuntu on Apple Silicon)
+    elif [ "$(uname -m)" = "aarch64" ] || [ "$(uname -m)" = "arm64" ]; then
+        # Check for Apple Silicon identifiers
+        if grep -qi "apple" /proc/cpuinfo 2>/dev/null || \
+           [ -d /sys/firmware/devicetree/base ] && grep -qi "apple" /sys/firmware/devicetree/base/compatible 2>/dev/null || \
+           dmesg 2>/dev/null | grep -qi "Apple M[0-9]"; then
+            GPU_TYPE="apple"
+            PERF_TIER="standard"
+            log "Detected Apple Silicon (ARM64)"
+        fi
     fi
-    
+
     log "Auto-detected: GPU=$GPU_TYPE, Tier=$PERF_TIER"
 fi
 
@@ -161,6 +261,26 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     log "Setup cancelled by user"
     exit 0
 fi
+
+# ============================================================================
+# PRE-FLIGHT: Validate config and check disk space
+# ============================================================================
+log ""
+log "Running pre-flight checks..."
+
+# Validate config if provided
+if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ]; then
+    if command -v jq &> /dev/null; then
+        validate_config "$CONFIG_FILE" || error_exit "Configuration validation failed"
+    fi
+fi
+
+# Check available disk space
+REQUIRED_SPACE=$(calculate_required_space)
+log "Checking disk space (need ${REQUIRED_SPACE}GB for selected configuration)..."
+check_disk_space "$REQUIRED_SPACE" "/" || error_exit "Not enough disk space"
+
+log ""
 
 # ============================================================================
 # STEP 1: System Update and Essential Packages
@@ -261,20 +381,44 @@ log "Performance tier: $PERF_TIER"
 cat > /tmp/download-models.sh << 'MODELEOF'
 #!/bin/bash
 
+# Colors for model download output
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
 download_model() {
     MODEL=$1
     NAME=$2
-    echo "[$(date +'%H:%M:%S')] Downloading $NAME..."
-    if ollama pull "$MODEL" 2>&1 | grep -q "success"; then
-        echo "[$(date +'%H:%M:%S')] ✓ $NAME downloaded"
-        return 0
-    else
-        echo "[$(date +'%H:%M:%S')] ✗ $NAME failed"
-        return 1
-    fi
+    MAX_RETRIES=3
+    RETRY_COUNT=0
+
+    echo -e "[$(date +'%H:%M:%S')] Downloading $NAME..."
+
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        # Run ollama pull and capture exit code
+        # Ollama shows progress and returns 0 on success
+        if ollama pull "$MODEL" 2>&1; then
+            # Verify model was actually downloaded by checking ollama list
+            if ollama list 2>/dev/null | grep -q "^${MODEL}"; then
+                echo -e "[$(date +'%H:%M:%S')] ${GREEN}✓${NC} $NAME downloaded successfully"
+                return 0
+            fi
+        fi
+
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+            echo -e "[$(date +'%H:%M:%S')] ${YELLOW}⚠${NC} $NAME download failed, retry $RETRY_COUNT/$MAX_RETRIES..."
+            sleep $((RETRY_COUNT * 5))  # Exponential backoff
+        fi
+    done
+
+    echo -e "[$(date +'%H:%M:%S')] ${RED}✗${NC} $NAME failed after $MAX_RETRIES attempts"
+    return 1
 }
 
 export -f download_model
+export GREEN RED YELLOW NC
 
 MODELEOF
 
@@ -481,15 +625,24 @@ log_success "Whisper installed"
 step "Install Piper TTS (Text-to-Speech)"
 
 log "Downloading Piper..."
-su - $GHOST_USER -c "cd ~ && wget -q https://github.com/rhasspy/piper/releases/download/v1.2.0/piper_amd64.tar.gz" || error_exit "Piper download failed"
+# Get latest Piper release dynamically
+PIPER_VERSION="v1.2.0"  # Fallback version
+if command -v curl &> /dev/null; then
+    LATEST_PIPER=$(curl -sI "https://github.com/rhasspy/piper/releases/latest" 2>/dev/null | grep -i "^location:" | grep -oP 'v[\d.]+' | head -1)
+    if [ -n "$LATEST_PIPER" ]; then
+        PIPER_VERSION="$LATEST_PIPER"
+    fi
+fi
+log "Using Piper version: $PIPER_VERSION"
+su - $GHOST_USER -c "cd ~ && wget -c -q --show-progress https://github.com/rhasspy/piper/releases/download/${PIPER_VERSION}/piper_amd64.tar.gz" || error_exit "Piper download failed"
 su - $GHOST_USER -c "cd ~ && tar -xzf piper_amd64.tar.gz && mv piper piper-tts && rm piper_amd64.tar.gz" || error_exit "Piper extraction failed"
 
 log "Downloading Piper voice models..."
 su - $GHOST_USER -c "mkdir -p ~/piper-tts/voices && cd ~/piper-tts/voices && \
-    wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx && \
-    wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json && \
-    wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx && \
-    wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx.json" || error_exit "Piper voices download failed"
+    wget -c -q --show-progress https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx && \
+    wget -c -q --show-progress https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json && \
+    wget -c -q --show-progress https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx && \
+    wget -c -q --show-progress https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/en_US-ryan-high.onnx.json" || error_exit "Piper voices download failed"
 
 # Create speak helper
 su - $GHOST_USER -c 'cat > ~/tools/speak.sh << '\''EOF'\''
@@ -549,7 +702,8 @@ else
     su - $GHOST_USER -c "cd ~/ComfyUI && pip3 install -r requirements.txt" >> "$LOG_FILE" 2>&1 || log_warning "Some ComfyUI dependencies may have failed"
 
     log "Downloading Stable Diffusion 1.5 model (~4GB)..."
-    su - $GHOST_USER -c "cd ~/ComfyUI/models/checkpoints && wget -q --show-progress https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors" || error_exit "SD model download failed"
+    log "Using resume-capable download (will continue if interrupted)"
+    su - $GHOST_USER -c "cd ~/ComfyUI/models/checkpoints && wget -c --show-progress --tries=5 --timeout=60 https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors" || error_exit "SD model download failed"
 
     # Create launcher
     su - $GHOST_USER -c 'cat > ~/start-comfyui.sh << '\''EOF'\''
@@ -585,23 +739,104 @@ step "Download Offline Wikipedia"
 
 if [ "$INSTALL_WIKIPEDIA" = "true" ]; then
     log "Wikipedia download enabled - this will take 1-3 hours (~96GB)"
-    
+
     read -p "Download Wikipedia now? (y/n) " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        log "Downloading Wikipedia (this will take a while)..."
-        su - $GHOST_USER -c "cd ~/offline-data/wikipedia && wget --show-progress https://download.kiwix.org/zim/wikipedia/wikipedia_en_all_nopic_2024-01.zim" || log_warning "Wikipedia download failed (you can download it later)"
-        
-        # Create launcher
+        log "Finding latest Wikipedia ZIM file..."
+
+        # Dynamic lookup of latest Wikipedia ZIM file
+        WIKI_BASE_URL="https://download.kiwix.org/zim/wikipedia"
+        WIKI_FILENAME=""
+
+        # Try to find the latest nopic English Wikipedia
+        if command -v curl &> /dev/null; then
+            # Get directory listing and find latest nopic file
+            WIKI_FILENAME=$(curl -sL "$WIKI_BASE_URL/" | \
+                grep -oP 'wikipedia_en_all_nopic_\d{4}-\d{2}\.zim(?=")' | \
+                sort -V | tail -1)
+        fi
+
+        # Fallback to known recent version if dynamic lookup fails
+        if [ -z "$WIKI_FILENAME" ]; then
+            log_warning "Could not determine latest version, using fallback"
+            # Try common recent versions
+            for version in "2024-06" "2024-03" "2024-01" "2023-12"; do
+                WIKI_FILENAME="wikipedia_en_all_nopic_${version}.zim"
+                if curl -sI "${WIKI_BASE_URL}/${WIKI_FILENAME}" | grep -q "200 OK"; then
+                    break
+                fi
+                WIKI_FILENAME=""
+            done
+        fi
+
+        if [ -z "$WIKI_FILENAME" ]; then
+            log_error "Could not find Wikipedia ZIM file"
+            log "You can download manually later from: $WIKI_BASE_URL"
+        else
+            WIKI_URL="${WIKI_BASE_URL}/${WIKI_FILENAME}"
+            log "Downloading: $WIKI_FILENAME"
+            log "URL: $WIKI_URL"
+            log "Using resume-capable download (will continue if interrupted)"
+
+            # Download with resume capability
+            su - $GHOST_USER -c "cd ~/offline-data/wikipedia && wget -c --show-progress --tries=10 --timeout=120 --waitretry=30 '$WIKI_URL'" || {
+                log_warning "Wikipedia download failed or incomplete"
+                log "To resume later, run:"
+                log "  cd ~/offline-data/wikipedia && wget -c '$WIKI_URL'"
+            }
+
+            # Verify download
+            if [ -f "$GHOST_HOME/offline-data/wikipedia/$WIKI_FILENAME" ]; then
+                WIKI_SIZE=$(du -h "$GHOST_HOME/offline-data/wikipedia/$WIKI_FILENAME" | cut -f1)
+                log_success "Wikipedia downloaded: $WIKI_SIZE"
+            fi
+        fi
+
+        # Create launcher (works with any .zim file)
         su - $GHOST_USER -c 'cat > ~/start-kiwix.sh << '\''EOF'\''
 #!/bin/bash
-kiwix-serve --port 8080 ~/offline-data/wikipedia/*.zim
+ZIM_FILE=$(ls ~/offline-data/wikipedia/*.zim 2>/dev/null | head -1)
+if [ -z "$ZIM_FILE" ]; then
+    echo "No Wikipedia ZIM file found in ~/offline-data/wikipedia/"
+    exit 1
+fi
+echo "Starting Kiwix server with: $(basename $ZIM_FILE)"
+echo "Open http://localhost:8080 in your browser"
+kiwix-serve --port 8080 "$ZIM_FILE"
 EOF'
         chmod +x "$GHOST_HOME/start-kiwix.sh"
-        
-        log_success "Wikipedia downloaded and configured"
+
+        log_success "Wikipedia configured"
     else
         log_warning "Wikipedia download skipped (you can download it later)"
+        log "To download later, run the start script which will provide instructions"
+
+        # Create download helper script
+        su - $GHOST_USER -c 'cat > ~/download-wikipedia.sh << '\''EOF'\''
+#!/bin/bash
+echo "Downloading offline Wikipedia..."
+echo "This will download ~96GB and may take several hours."
+echo ""
+cd ~/offline-data/wikipedia
+
+# Find latest version
+LATEST=$(curl -sL "https://download.kiwix.org/zim/wikipedia/" | \
+    grep -oP '\''wikipedia_en_all_nopic_\d{4}-\d{2}\.zim(?=")'\'' | \
+    sort -V | tail -1)
+
+if [ -z "$LATEST" ]; then
+    echo "Could not find latest version, using fallback..."
+    LATEST="wikipedia_en_all_nopic_2024-01.zim"
+fi
+
+echo "Downloading: $LATEST"
+wget -c --show-progress "https://download.kiwix.org/zim/wikipedia/${LATEST}"
+
+echo ""
+echo "Download complete! Run ./start-kiwix.sh to start the server."
+EOF'
+        chmod +x "$GHOST_HOME/download-wikipedia.sh"
     fi
 else
     log_warning "Wikipedia download disabled in configuration"

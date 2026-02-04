@@ -1,0 +1,69 @@
+{
+  "version": "1.0",
+  "generated": "2024-01-15T10:30:00Z",
+  "tier": "standard",
+  "hardware": {
+    "cpu": "Intel Core i7-12700K",
+    "gpu": "NVIDIA RTX 3080",
+    "ram": "32GB",
+    "detected_on": "host"
+  },
+  "target_hardware": {
+    "description": "Same as detected (building for this machine)",
+    "override": false
+  },
+  "models": [
+    {
+      "id": "llama3.2:3b",
+      "name": "Llama 3.2 3B",
+      "size": "2.0GB",
+      "purpose": "fast"
+    },
+    {
+      "id": "llama3.1:8b",
+      "name": "Llama 3.1 8B",
+      "size": "4.7GB",
+      "purpose": "general"
+    },
+    {
+      "id": "qwen2.5-coder:7b",
+      "name": "Qwen 2.5 Coder 7B",
+      "size": "4.4GB",
+      "purpose": "coding"
+    },
+    {
+      "id": "mistral:7b",
+      "name": "Mistral 7B",
+      "size": "4.1GB",
+      "purpose": "alternative"
+    },
+    {
+      "id": "llama3.2-vision:11b",
+      "name": "Llama 3.2 Vision 11B",
+      "size": "6.4GB",
+      "purpose": "vision"
+    },
+    {
+      "id": "nomic-embed-text",
+      "name": "Nomic Embed Text",
+      "size": "274MB",
+      "purpose": "embeddings"
+    }
+  ],
+  "options": {
+    "wikipedia": true,
+    "encryption": true,
+    "docs": true,
+    "books": false,
+    "image_generation": true,
+    "speech": true
+  },
+  "storage_estimate": {
+    "base_system": "15GB",
+    "ai_models": "45GB",
+    "wikipedia": "96GB",
+    "comfyui": "8GB",
+    "total_minimum": "170GB",
+    "recommended": "256GB"
+  }
+}

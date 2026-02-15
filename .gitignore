@@ -1,0 +1,31 @@
+# Utilities folder - internal development files only
+utilities/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Local configuration
+.env
+.env.local
+config.local.json
+
+# VM files (if testing locally)
+*.qcow2
+*.iso
+ghost-ai-test-vm/
